@@ -1,4 +1,4 @@
-
+#İLK YAPTIĞIM BEĞENMEDİĞİM VERSİYONDU#
 # from threading import Thread  #eşzamanlı çalıştırmak için konum ve irtifa msl aynı anda
 # from time import sleep        #düzenli aralıklarla olştrurmak için
 # import random
