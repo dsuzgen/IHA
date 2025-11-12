@@ -1,0 +1,96 @@
+-- KamikazeControl.lua
+-- İTÜ ATA Takımı - ArduPlane Görev Scripti
+
+-- =============================
+-- AYARLAR
+-- =============================
+
+local target_altitude = 100      -- Kalkış sonrası ulaşılacak irtifa (metre)
+local kamikaze_angle = -45       -- Kamikaze dalış açısı (derece)
+local kamikaze_min_alt = 30      -- Dalış sırasında minimum irtifa (metre)
+local waypoint_after_dive = 2    -- Dalış sonrası gidilecek waypoint numarası
+
+-- =============================
+-- DEĞİŞKENLER
+-- =============================
+local state = 0                  -- 0=Takeoff, 1=Rota Takibi, 2=Kamikaze, 3=Recovery, 4=Landing
+local last_time = 0
+
+-- =============================
+-- GÖREV BAŞLATMA
+-- =============================
+function init()
+    gcs:send_text(0, "Kamikaze LUA Script Baslatildi")
+end
+
+-- =============================
+-- ANA DÖNGÜ
+-- =============================
+function update()
+
+    local mode = vehicle:get_mode()
+    local alt = ahrs:get_relative_position_NED():z() * -1 -- negatif değer, yukarı çevir
+    local wp_index = mission:get_current_nav_index()
+
+    ----------------------------------
+    -- DURUM 0: TAKEOFF
+    ----------------------------------
+    if state == 0 then
+        if mode:name() ~= "TAKEOFF" then
+            gcs:send_text(0, "Takeoff baslatiliyor...")
+            vehicle:set_mode(4)  -- 4 = TAKEOFF modu
+        elseif alt >= target_altitude then
+            gcs:send_text(0, "Hedef irtifaya ulasildi, rota takibine geciliyor.")
+            vehicle:set_mode(3)  -- 3 = AUTO
+            state = 1
+        end
+
+    ----------------------------------
+    -- DURUM 1: ROTA TAKİBİ
+    ----------------------------------
+    elseif state == 1 then
+        if wp_index == 1 then
+            gcs:send_text(0, "Kamikaze noktasi algilandi!")
+            state = 2
+        end
+
+    ----------------------------------
+    -- DURUM 2: KAMİKAZE DALIŞ
+    ----------------------------------
+    elseif state == 2 then
+        gcs:send_text(0, "Kamikaze dalisi basladi...")
+        vehicle:set_mode(2)  -- 2 = FBWA
+        local pitch_target = math.rad(kamikaze_angle)
+        plane:set_pitch_target(pitch_target)
+
+        if alt <= kamikaze_min_alt then
+            gcs:send_text(0, "Minimum irtifaya ulasildi, yukselis baslatiliyor.")
+            state = 3
+        end
+
+    ----------------------------------
+    -- DURUM 3: YÜKSELİŞ VE ROTA DEVAMI
+    ----------------------------------
+    elseif state == 3 then
+        vehicle:set_mode(3)  -- 3 = AUTO
+        mission:set_current_nav_index(waypoint_after_dive)
+        gcs:send_text(0, "Rota devam ediyor...")
+        state = 4
+
+    ----------------------------------
+    -- DURUM 4: İNİŞ
+    ----------------------------------
+    elseif state == 4 then
+        if wp_index >= mission:num_commands() - 1 then
+            gcs:send_text(0, "Inis noktasina ulasildi, otonom inis baslatiliyor.")
+            vehicle:set_mode(9)  -- 9 = RTL (veya LAND modu)
+        end
+    end
+
+    return update, 1000 -- 1 saniye aralıkla çalış
+end
+
+-- =============================
+-- SCRIPT ÇALIŞTIRMA
+-- =============================
+return update()
